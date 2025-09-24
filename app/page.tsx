@@ -38,7 +38,7 @@ export default function Page() {
         </p>
         <div className="mt-8">
           <Link
-            href="/setup"
+            href="/setup?autostart=1"
             className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-6 py-3 text-white text-sm sm:text-base font-semibold shadow-sm hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             Try the Demo
@@ -69,7 +69,7 @@ export default function Page() {
                 <div className="text-white text-xl sm:text-2xl font-semibold drop-shadow">Olivia is calling</div>
                 <div className="mt-4 pointer-events-auto">
                   <Link
-                    href="/setup"
+                    href="/setup?autostart=1"
                     className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white text-sm font-semibold shadow hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                   >
                     <span className="inline-block h-2 w-2 rounded-full bg-white" />
