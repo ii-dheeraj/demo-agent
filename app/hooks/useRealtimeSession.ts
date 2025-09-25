@@ -158,7 +158,30 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
   );
 
   const disconnect = useCallback(() => {
-    sessionRef.current?.close();
+    try {
+      // Stop any in-flight response generation immediately
+      sessionRef.current?.interrupt();
+      // Proactively mute to stop any capture before closing
+      sessionRef.current?.mute(true);
+      // Clear any buffered audio to avoid commits after close
+      sessionRef.current?.transport?.sendEvent?.({ type: 'input_audio_buffer.clear' } as any);
+    } catch {}
+    try {
+      // Best-effort remove listeners to avoid stray events
+      if (sessionRef.current) {
+        sessionRef.current.off?.("agent_handoff", handleAgentHandoff as any);
+        sessionRef.current.off?.("agent_tool_start", historyHandlers.handleAgentToolStart as any);
+        sessionRef.current.off?.("agent_tool_end", historyHandlers.handleAgentToolEnd as any);
+        sessionRef.current.off?.("history_updated", historyHandlers.handleHistoryUpdated as any);
+        sessionRef.current.off?.("history_added", historyHandlers.handleHistoryAdded as any);
+        sessionRef.current.off?.("guardrail_tripped", historyHandlers.handleGuardrailTripped as any);
+        sessionRef.current.off?.("transport_event", handleTransportEvent as any);
+        sessionRef.current.off?.("error", logServerEvent as any);
+      }
+    } catch {}
+    try {
+      sessionRef.current?.close();
+    } catch {}
     sessionRef.current = null;
     updateStatus('DISCONNECTED');
   }, [updateStatus]);

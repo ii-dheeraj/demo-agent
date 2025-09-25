@@ -144,7 +144,11 @@ export default function SetupPage() {
     interviewStartedRef.current = true;
     setInterviewStarted(true);
     
-    if (useRealtimeAgent && realtimeStatus === "CONNECTED") {
+    if (useRealtimeAgent) {
+      // Ensure the realtime agent is connected only once the meeting starts
+      if (realtimeStatus !== "CONNECTED") {
+        try { await connectToRealtime(); } catch {}
+      }
       // Let the AI agent handle the interview
       return;
     }
@@ -223,8 +227,8 @@ export default function SetupPage() {
       await listDevices();
       setStatus("granted");
       
-      // Auto-connect to realtime if enabled
-      if (useRealtimeAgent) {
+      // Only connect after the meeting actually starts
+      if (useRealtimeAgent && interviewStartedRef.current) {
         await connectToRealtime();
       }
     } catch (err: any) {
@@ -235,12 +239,19 @@ export default function SetupPage() {
     }
   };
 
-  // Auto-connect to realtime when useRealtimeAgent is enabled
+  // Auto-connect to realtime only while in a meeting
   useEffect(() => {
-    if (useRealtimeAgent && status === "granted" && realtimeStatus === "DISCONNECTED") {
+    if (useRealtimeAgent && interviewStarted && status === "granted" && realtimeStatus === "DISCONNECTED") {
       connectToRealtime();
     }
-  }, [useRealtimeAgent, status, realtimeStatus]);
+  }, [useRealtimeAgent, interviewStarted, status, realtimeStatus]);
+
+  // If agent is toggled OFF during a meeting, disconnect immediately
+  useEffect(() => {
+    if (!useRealtimeAgent && realtimeStatus !== "DISCONNECTED") {
+      try { realtimeSession.disconnect(); } catch {}
+    }
+  }, [useRealtimeAgent, realtimeStatus]);
 
   const connectToRealtime = async () => {
     try {
@@ -290,6 +301,10 @@ export default function SetupPage() {
           audioRef.current = null;
         }
       } catch {}
+      // Ensure realtime agent disconnects when leaving the page
+      try { realtimeSession.disconnect(); } catch {}
+      // Stop any browser STT if running
+      try { recognitionRef.current?.stop?.(); } catch {}
     };
   }, []);
 
@@ -422,7 +437,22 @@ export default function SetupPage() {
       mediaStreamRef.current.getTracks().forEach(t => t.stop());
       mediaStreamRef.current = null;
     }
-    router.push("/");
+    // Disconnect realtime session and stop any ongoing STT
+    try { realtimeSession.disconnect(); } catch {}
+    try { recognitionRef.current?.stop?.(); } catch {}
+    // Reset interview state so nothing continues in background
+    try {
+      interviewStartedRef.current = false;
+      setInterviewStarted(false);
+      setQIndex(0);
+      setQuestion("");
+      setTranscript([]);
+      setSttTranscript("");
+      setSttInterim("");
+      currentTurnRef.current = "";
+      lastActivityAtRef.current = 0;
+    } catch {}
+    router.push("/transcript");
   };
 
   const mmss = (s: number) => {
@@ -619,20 +649,9 @@ export default function SetupPage() {
           </div>
         </div>
 
-        {/* Start Interview button (only visible until started) */}
-        {!interviewStarted && status === "granted" && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col gap-2">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setUseRealtimeAgent(!useRealtimeAgent)}
-                className={`px-3 py-1.5 text-xs rounded-full ${useRealtimeAgent ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                {useRealtimeAgent ? 'AI Agent: ON' : 'AI Agent: OFF'}
-              </button>
-              <div className={`px-2 py-1 text-xs rounded-full ${realtimeStatus === 'CONNECTED' ? 'bg-green-200 text-green-800' : realtimeStatus === 'CONNECTING' ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-600'}`}>
-                {realtimeStatus}
-              </div>
-            </div>
+        {/* Start Interview button (only visible until started and when autostart is not requested) */}
+        {!interviewStarted && status === "granted" && !((searchParams?.get("autostart") || "").toLowerCase() === "1" || (searchParams?.get("autostart") || "").toLowerCase() === "true" || envAutoStart) && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex">
             <button
               onClick={onStartInterview}
               className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white text-sm font-semibold shadow hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
@@ -649,7 +668,7 @@ export default function SetupPage() {
         </div>
         {/* Question bubble removed per request: agent will speak questions without on-screen text */}
         {/* Transcript panel (if using browser STT) */}
-        {useBrowserSpeech && (
+        {useBrowserSpeech && interviewStarted && (
           <div className="absolute top-4 left-4 right-4 mx-4 sm:max-w-xl sm:left-6 sm:right-auto">
             <div className="rounded-xl bg-white/80 backdrop-blur ring-1 ring-black/10 p-3 text-sm text-gray-800 max-h-40 overflow-auto">
               <div className="font-semibold mb-1">Transcript</div>
